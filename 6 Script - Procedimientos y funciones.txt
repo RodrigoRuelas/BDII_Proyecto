@@ -1,4 +1,44 @@
--- PROCEDIMIENTOS
+-- PROCEDIMIENTOS Y FUNCIONES
+
+-- FUNCION: Calculo de subtotal, IGV, descuento y total
+IF OBJECT_ID('ventas.CalcularTotalesCompra', 'FN') IS NOT NULL
+    DROP FUNCTION ventas.CalcularTotalesCompra;
+GO
+
+CREATE FUNCTION ventas.CalcularTotalesCompra(
+    @DescuentoPorcentaje DECIMAL(5, 2), -- Porcentaje de descuento
+    @idProducto1 INT, @cantidad1 INT,
+    @idProducto2 INT, @cantidad2 INT,
+    @idProducto3 INT, @cantidad3 INT
+)
+RETURNS TABLE
+AS
+RETURN
+(
+    WITH ProductosCalculados AS (
+        SELECT 
+            p.idProducto,
+            p.precioUnitario,
+            d.Cantidad,
+            (p.precioUnitario * d.Cantidad) AS SubtotalProducto
+        FROM 
+            (VALUES 
+                (@idProducto1, @cantidad1),
+                (@idProducto2, @cantidad2),
+                (@idProducto3, @cantidad3)
+            ) AS d (idProducto, Cantidad)
+        INNER JOIN productos.Producto p ON p.idProducto = d.idProducto
+    )
+    SELECT
+        SUM(SubtotalProducto) AS Subtotal,
+        SUM(SubtotalProducto) * 0.10 AS IGV, -- 10% del Subtotal
+        SUM(SubtotalProducto) * (@DescuentoPorcentaje / 100) AS Descuento,
+        SUM(SubtotalProducto) + (SUM(SubtotalProducto) * 0.10) - 
+        (SUM(SubtotalProducto) * (@DescuentoPorcentaje / 100)) AS Total
+    FROM ProductosCalculados
+);
+GO
+
 
 -- 1. Realizar Ventas
 IF OBJECT_ID('ventas.RealizarCompra', 'P') IS NOT NULL
@@ -9,7 +49,7 @@ CREATE PROCEDURE ventas.RealizarCompra (
     @numComprobante INT,
     @tipoComprobante NVARCHAR(50),
     @idCliente INT,
-    @DescuentoPorcentaje DECIMAL(5, 2), -- Porcentaje de descuento a aplicar
+    @DescuentoPorcentaje DECIMAL(5, 2), -- Porcentaje de descuento
     @idProducto1 INT, @cantidad1 INT,
     @idProducto2 INT, @cantidad2 INT,
     @idProducto3 INT, @cantidad3 INT
@@ -17,7 +57,7 @@ CREATE PROCEDURE ventas.RealizarCompra (
 AS
 BEGIN
     -- Declaración de variables
-    DECLARE @Subtotal DECIMAL(10, 2) = 0.0;
+    DECLARE @Subtotal DECIMAL(10, 2);
     DECLARE @IGV DECIMAL(10, 2);
     DECLARE @Descuento DECIMAL(10, 2);
     DECLARE @Total DECIMAL(10, 2);
@@ -30,25 +70,18 @@ BEGIN
         -- Fecha actual
         DECLARE @fechaCompra DATE = GETDATE();
 
-        -- Calcular el subtotal sumando el precio total de cada producto
-        SELECT @Subtotal = 
-            (SELECT SUM(p.precioUnitario * d.Cantidad)
-             FROM 
-                (VALUES 
-                    (@idProducto1, @cantidad1),
-                    (@idProducto2, @cantidad2),
-                    (@idProducto3, @cantidad3)
-                ) AS d (idProducto, Cantidad)
-             INNER JOIN productos.Producto p ON p.idProducto = d.idProducto);
-
-        -- Calcular IGV (10% del subtotal)
-        SET @IGV = @Subtotal * 0.10;
-
-        -- Calcular el descuento
-        SET @Descuento = @Subtotal * (@DescuentoPorcentaje / 100);
-
-        -- Calcular el total
-        SET @Total = @Subtotal + @IGV - @Descuento;
+        -- Obtener los valores calculados de la función
+        SELECT 
+            @Subtotal = Subtotal, 
+            @IGV = IGV, 
+            @Descuento = Descuento, 
+            @Total = Total
+        FROM ventas.CalcularTotalesCompra(
+            @DescuentoPorcentaje, 
+            @idProducto1, @cantidad1,
+            @idProducto2, @cantidad2,
+            @idProducto3, @cantidad3
+        );
 
         -- Paso 1: Registrar la compra en la tabla Compra
         INSERT INTO ventas.Compra (numComprobante, tipoComprobante, fechaCompra, idCliente, Subtotal, IGV, Descuento, Total)
@@ -102,8 +135,6 @@ EXEC ventas.RealizarCompra
     @idProducto1 = 1, @cantidad1 = 2,
     @idProducto2 = 2, @cantidad2 = 1,
     @idProducto3 = 3, @cantidad3 = 3;
-
-
 
 
 -- 2. Procedimiento para la entrada de productos en el inventario
