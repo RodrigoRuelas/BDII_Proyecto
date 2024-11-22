@@ -1,0 +1,140 @@
+-- 1. Cursor : Reporte de productos según su categoría
+Declare Cursor0 Cursor For SELECT c.idCategoria, c.Nombre AS NombreCategoria, COUNT(p.idProducto) AS CantidadProductos FROM productos.Categoria c LEFT JOIN productos.Producto p ON c.idCategoria = p.idCategoria GROUP BY c.idCategoria, c.Nombre ORDER BY c.idCategoria;
+Declare @vc_idCategoria0 varchar(50), @vc_nombre varchar(50), @CantidadProductos varchar(10)
+Open Cursor0
+Fetch Cursor0 Into @vc_idCategoria0, @vc_nombre, @CantidadProductos
+Print Space(25)+'REPORTE DE CATEGORIAS'
+Print Space(25)+Replicate('*',25)
+While @@FETCH_STATUS=0
+	Begin
+		Print 'ID de la Categoria		: '+@vc_idCategoria0
+		Print 'Nombre de la Categoria	: '+@vc_nombre
+		Print ''
+		Declare Cursor1 Cursor For select idProducto, nombreProducto, precioUnitario from productos.Producto where idCategoria = @vc_idCategoria0
+		Declare @vc_idProducto varchar(50), @vc_nombreProducto varchar(50), @vc_precioUnitario varchar(50)
+		Open Cursor1
+		Fetch Cursor1 Into @vc_idProducto, @vc_nombreProducto, @vc_precioUnitario
+		Print Space(25)+'REPORTE DE PRODUCTOS DE LA CATEGORIA'
+		Print Space(25)+Replicate('*',25)
+		While @@FETCH_STATUS=0
+			Begin
+				Print 'ID de Producto		: '+@vc_idProducto
+				Print 'Nombre del Producto  : '+@vc_nombreProducto
+				Print 'Precio del Producto	: '+@vc_precioUnitario
+				Print ''
+				Fetch Cursor1 Into @vc_idProducto, @vc_nombreProducto, @vc_precioUnitario
+			End
+		Print 'Cantidad de productos : ' +  @CantidadProductos
+		Print Replicate ('*',50)
+		Close Cursor1
+		Deallocate Cursor1
+		Fetch Cursor0 Into @vc_idCategoria0, @vc_nombre, @CantidadProductos
+	End
+Print Replicate ('*',50)
+Close Cursor0
+Deallocate Cursor0
+go
+
+-- 2. Cursor de reporte de venta de un cliente
+Declare Cursor2  Cursor For Select idCompra, numComprobante, tipoComprobante, idCliente, fechaCompra, Subtotal, IGV, Descuento, Total from ventas.Compra Where idCompra = 2
+Declare @idCompra varchar(10), @numComprobante varchar(10), @tipoComprobante varchar(10), @idCliente varchar(10), @fechaCompra varchar(10), @Subtotal varchar(10), @IGV varchar(10), @Descuento varchar(10), @Total varchar(10)
+Open Cursor2
+Fetch Cursor2 Into @idCompra, @numComprobante, @tipoComprobante, @idCliente, @fechaCompra, @Subtotal, @IGV, @Descuento, @Total
+Print Space(25) + 'Comprobante de compra'
+Print Space(25)+Replicate('*',25)
+	Begin
+		Print 'ID de la compra 		: ' + @idCompra
+		Print 'Numero de Comprobante 	: ' + @numComprobante
+		Print 'Tipo de Comprobante 	: ' + @tipoComprobante
+		Print 'Fecha de compra 		: ' + @fechaCompra 
+		Print 'Datos del cliente'
+		
+		Declare Cursor3 Cursor For SELECT c.idCliente, c.Direccion1, c.Telefono, n.DNI AS Documento, n.Nombre AS NombreCliente, n.ApellidoP AS ApellidoPaterno, n.ApellidoM AS ApellidoMaterno FROM clientes.Cliente c JOIN clientes.Natural n ON c.idCliente = n.idCliente WHERE c.idCliente = @idCliente;
+		Declare @idC varchar(10), @Direccion1 varchar(50), @Telefono varchar(10), @DNI varchar(10), @Nombre varchar(10), @ApellidoP varchar(10), @ApellidoM varchar(10)
+		Open Cursor3
+		Fetch Cursor3 Into @idC, @Direccion1, @Telefono, @DNI, @Nombre, @ApellidoP, @ApellidoM
+			Begin
+				Print 'Nombre y Apellidos del cliente	: ' + @Nombre + ' ' + @ApellidoP + ' ' + @ApellidoM
+				Print 'DNI del cliente					: ' + @DNI
+				Print 'Direccion					: ' + @Direccion1
+				Print 'Telefono						: ' + @Telefono
+			End
+		Close Cursor3
+		Deallocate Cursor3	
+
+		Print 'Detalles de la compra'
+
+		Declare Cursor4 Cursor For SELECT p.idProducto, p.nombreProducto, dc.Cantidad, p.precioUnitario, (dc.Cantidad * p.precioUnitario) AS SubtotalProducto FROM ventas.DetalleCompra dc JOIN productos.Producto p ON dc.idProducto = p.idProducto WHERE dc.idCompra = @idCompra;
+		Declare @idProducto varchar(10), @nombreProducto varchar(10), @cantidad varchar(10), @precioUnitario varchar(10), @TotalProducto varchar(10)
+		Open Cursor4
+		Fetch Cursor4 Into @idProducto, @nombreProducto, @cantidad, @precioUnitario, @TotalProducto
+		Print 'Codigo' + '	 ' + 'Producto' + '		' + 'Cantidad' + '	 ' + 'PU' + '				' + 'Total'
+		While @@FETCH_STATUS=0
+			Begin
+				Print @idProducto + '		' + @nombreProducto + '			' + @cantidad + '		' + @precioUnitario + '			' + @TotalProducto
+				Fetch Cursor4 Into @idProducto, @nombreProducto, @cantidad, @precioUnitario, @TotalProducto
+			End
+		Close Cursor4
+		Deallocate Cursor4
+
+		Print 'Subtotal 		: ' + @Subtotal
+		Print 'IGV 			: ' + @IGV
+		Print 'Descuento 		: ' + @Descuento
+		Print 'Total 			: ' + @Total	
+
+	End
+Close Cursor2
+Deallocate Cursor2
+GO
+
+-- Cursor adicional
+Declare Cursor2 Cursor for select idCategoria, nombre from productos.Categoria
+Declare @idCategoria varchar(10), @nombre varchar(10)
+Open Cursor2
+Fetch Cursor2 into @idCategoria, @nombre
+Print Space(25) + 'Reporte de productos vendidos por categoria'
+While @@FETCH_STATUS=0
+	Begin
+		Print 'Categoria : ' + @nombre
+		
+		Declare Cursor1 Cursor for select idProducto, codeProducto, nombreProducto from productos.Producto where idCategoria = @idCategoria
+		Declare @idProducto varchar(10), @codeProducto varchar(10), @nombreProducto varchar(50)
+		Open Cursor1 
+		Fetch Cursor1 into @idProducto, @codeProducto, @nombreProducto
+		Print '		- Producto -'
+		While @@FETCH_STATUS=0
+			Begin
+				Print '		ID del Producto		: ' + @idProducto
+				Print '		Codigo del Producto : ' + @codeProducto
+				Print '		Nombre del Producto : ' + @nombreProducto
+
+			Declare Cursor0 Cursor For select p.idProducto, Cantidad FROM ventas.DetalleCompra dc JOIN productos.Producto p ON dc.idProducto = p.idProducto JOIN ventas.Compra c ON dc.idCompra = c.idCompra WHERE p.idProducto = @idProducto
+			Declare @idP varchar(10), @Cantidad varchar(10)
+			Open Cursor0
+			Fetch Cursor0 into @idP, @Cantidad
+			While @@FETCH_STATUS=0
+				Begin
+					Print '			Cantidad vendida	: ' + @Cantidad
+					Fetch Cursor0 into @idP, @Cantidad
+				End
+			Close Cursor0
+			Deallocate Cursor0
+				
+				Print ''
+				Fetch Cursor1 into @idProducto, @codeProducto, @nombreProducto
+			End
+		Close Cursor1
+		Deallocate Cursor1
+
+		Fetch Cursor2 into @idCategoria, @nombre
+	End
+Close Cursor2
+Deallocate Cursor2
+
+-- 3. Cursor de reporte de ventas del dia
+
+-- 4. Cursor de reporte de ventas del mes
+
+-- 5. Cursor de reporte de entradas de productos del mes
+
+-- 6. Cursor de reporte de salidas de productos del mes

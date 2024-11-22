@@ -1,0 +1,351 @@
+-- PROCEDIMIENTOS
+
+-- 1. Realizar Ventas
+IF OBJECT_ID('ventas.RealizarCompra', 'P') IS NOT NULL
+    DROP PROCEDURE ventas.RealizarCompra;
+GO
+
+CREATE PROCEDURE ventas.RealizarCompra (
+    @numComprobante INT,
+    @tipoComprobante NVARCHAR(50),
+    @idCliente INT,
+    @DescuentoPorcentaje DECIMAL(5, 2), -- Porcentaje de descuento a aplicar
+    @idProducto1 INT, @cantidad1 INT,
+    @idProducto2 INT, @cantidad2 INT,
+    @idProducto3 INT, @cantidad3 INT
+)
+AS
+BEGIN
+    -- Declaración de variables
+    DECLARE @Subtotal DECIMAL(10, 2) = 0.0;
+    DECLARE @IGV DECIMAL(10, 2);
+    DECLARE @Descuento DECIMAL(10, 2);
+    DECLARE @Total DECIMAL(10, 2);
+    DECLARE @idCompra INT;
+
+    -- Empezar la transacción
+    BEGIN TRANSACTION;
+
+    BEGIN TRY
+        -- Fecha actual
+        DECLARE @fechaCompra DATE = GETDATE();
+
+        -- Calcular el subtotal sumando el precio total de cada producto
+        SELECT @Subtotal = 
+            (SELECT SUM(p.precioUnitario * d.Cantidad)
+             FROM 
+                (VALUES 
+                    (@idProducto1, @cantidad1),
+                    (@idProducto2, @cantidad2),
+                    (@idProducto3, @cantidad3)
+                ) AS d (idProducto, Cantidad)
+             INNER JOIN productos.Producto p ON p.idProducto = d.idProducto);
+
+        -- Calcular IGV (10% del subtotal)
+        SET @IGV = @Subtotal * 0.10;
+
+        -- Calcular el descuento
+        SET @Descuento = @Subtotal * (@DescuentoPorcentaje / 100);
+
+        -- Calcular el total
+        SET @Total = @Subtotal + @IGV - @Descuento;
+
+        -- Paso 1: Registrar la compra en la tabla Compra
+        INSERT INTO ventas.Compra (numComprobante, tipoComprobante, fechaCompra, idCliente, Subtotal, IGV, Descuento, Total)
+        VALUES (@numComprobante, @tipoComprobante, @fechaCompra, @idCliente, @Subtotal, @IGV, @Descuento, @Total);
+
+        SET @idCompra = SCOPE_IDENTITY();
+
+        -- Paso 2: Insertar los detalles de la compra en DetalleCompra
+        INSERT INTO ventas.DetalleCompra (idCompra, idProducto, Cantidad)
+        VALUES 
+            (@idCompra, @idProducto1, @cantidad1),
+            (@idCompra, @idProducto2, @cantidad2),
+            (@idCompra, @idProducto3, @cantidad3);
+
+        -- Paso 3: Registrar una salida en la tabla Salida para cada producto
+        INSERT INTO productos.Salida (idProducto, fechaSalida, cantidadSalida)
+        VALUES 
+            (@idProducto1, @fechaCompra, @cantidad1),
+            (@idProducto2, @fechaCompra, @cantidad2),
+            (@idProducto3, @fechaCompra, @cantidad3);
+
+        -- Paso 4: Actualizar el stock en la tabla Inventario para cada producto
+        UPDATE productos.Inventario
+        SET Stock = Stock - @cantidad1
+        WHERE idProducto = @idProducto1;
+
+        UPDATE productos.Inventario
+        SET Stock = Stock - @cantidad2
+        WHERE idProducto = @idProducto2;
+
+        UPDATE productos.Inventario
+        SET Stock = Stock - @cantidad3
+        WHERE idProducto = @idProducto3;
+
+        -- Confirmar la transacción
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        -- Si hay algún error, deshacer la transacción
+        ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+ 
+EXEC ventas.RealizarCompra 
+    @numComprobante = 1001,
+    @tipoComprobante = 'Factura',
+    @idCliente = 26,
+    @DescuentoPorcentaje = 5.00, -- 5% de descuento
+    @idProducto1 = 1, @cantidad1 = 2,
+    @idProducto2 = 2, @cantidad2 = 1,
+    @idProducto3 = 3, @cantidad3 = 3;
+
+
+
+
+-- 2. Procedimiento para la entrada de productos en el inventario
+IF OBJECT_ID('sp_AgregarProductoInventario', 'P') IS NOT NULL
+    DROP PROCEDURE sp_AgregarProductoInventario;
+
+GO
+
+CREATE PROCEDURE sp_AgregarProductoInventario
+    @idProducto INT,
+    @cantidadEntrada INT
+AS
+BEGIN
+    -- Declaraciones de variables
+    DECLARE @stockActual INT, @fechaActual DATE;
+
+    -- Establecer la fecha actual
+    SET @fechaActual = GETDATE();
+
+    -- Verificar si el producto existe en el inventario
+    IF NOT EXISTS (SELECT 1 FROM productos.Inventario WHERE idProducto = @idProducto)
+    BEGIN
+        RAISERROR('El producto con ID %d no existe en el inventario. Operación cancelada.', 16, 1, @idProducto);
+        RETURN;
+    END
+
+    -- Obtener el stock actual del producto
+    SELECT @stockActual = Stock
+    FROM productos.Inventario
+    WHERE idProducto = @idProducto;
+
+    -- Actualizar el stock en inventario sumando la cantidad de entrada
+    UPDATE productos.Inventario
+    SET Stock = Stock + @cantidadEntrada
+    WHERE idProducto = @idProducto;
+
+    -- Registrar la entrada en la tabla Entrada
+    INSERT INTO productos.Entrada (idProducto, fechaEntrada, cantidadEntrada)
+    VALUES (@idProducto, @fechaActual, @cantidadEntrada);
+
+    -- Confirmación de la operación
+    PRINT 'Producto agregado al inventario y entrada registrada correctamente para el producto ' + CAST(@idProducto AS NVARCHAR);
+END;
+GO
+
+
+EXEC sp_AgregarProductoInventario @idProducto = 1, @cantidadEntrada = 50;
+
+
+-- 3. Procedimiento para verificar si es stock de los productos es bajo
+IF OBJECT_ID('sp_VerificarStockBajo', 'P') IS NOT NULL
+    DROP PROCEDURE sp_VerificarStockBajo;
+
+GO
+
+CREATE PROCEDURE sp_VerificarStockBajo
+AS
+BEGIN
+    SELECT p.nombreProducto, p.descripcion, i.Stock
+    FROM productos.Producto p
+    JOIN productos.Inventario i ON p.idProducto = i.idProducto
+    WHERE i.Stock < 25;
+
+    PRINT 'Consulta de stock bajo completada.';
+END;
+GO
+
+EXEC sp_VerificarStockBajo;
+
+
+-- 4. Procedimiento para ver las ventas del dia
+IF OBJECT_ID('sp_VentasDelDia', 'P') IS NOT NULL
+    DROP PROCEDURE sp_VentasDelDia;
+
+GO
+
+CREATE PROCEDURE sp_VentasDelDia
+AS
+BEGIN
+    DECLARE @fechaHoy DATE = CONVERT(DATE, GETDATE());
+
+    SELECT c.numComprobante, c.fechaCompra, d.idProducto, p.nombreProducto, d.Cantidad
+    FROM ventas.Compra c
+    JOIN ventas.DetalleCompra d ON c.idCompra = d.idCompra
+    JOIN productos.Producto p ON d.idProducto = p.idProducto
+    WHERE c.fechaCompra = @fechaHoy;
+
+    PRINT 'Consulta de ventas del día completada.';
+END;
+GO
+
+EXEC sp_VentasDelDia;
+
+
+-- 5. Procedimiento para crear un nuevo producto
+IF OBJECT_ID('sp_AgregarProducto', 'P') IS NOT NULL
+    DROP PROCEDURE sp_AgregarProducto;
+
+GO
+
+CREATE PROCEDURE sp_AgregarProducto
+    @codeProducto NVARCHAR(10),
+    @nombreProducto NVARCHAR(100),
+    @tipo NVARCHAR(10),
+    @descripcion NVARCHAR(255),
+    @idCategoria INT,
+    @precioUnitario DECIMAL(10, 2),
+    @cantidadInicial INT,
+    @fechaEntrada DATE,
+	@idZonaInventario VARCHAR(10)
+AS
+BEGIN
+    BEGIN TRY
+        -- Iniciar transacción
+        BEGIN TRANSACTION;
+
+        -- Insertar el nuevo producto en la tabla Producto
+        DECLARE @idProducto INT;
+        INSERT INTO productos.Producto (codeProducto, nombreProducto, Tipo, Descripcion, idCategoria, precioUnitario)
+        VALUES (@codeProducto, @nombreProducto, @tipo, @descripcion, @idCategoria, @precioUnitario);
+
+        -- Obtener el idProducto recién insertado
+        SET @idProducto = SCOPE_IDENTITY();
+
+        -- Registrar la entrada inicial en la tabla Entrada
+        INSERT INTO productos.Entrada (idProducto, fechaEntrada, cantidadEntrada)
+        VALUES (@idProducto, @fechaEntrada, @cantidadInicial);
+
+        -- Actualizar el inventario con la cantidad inicial
+        IF EXISTS (SELECT 1 FROM productos.Inventario WHERE idProducto = @idProducto)
+        BEGIN
+            UPDATE productos.Inventario
+            SET Stock = Stock + @cantidadInicial
+            WHERE idProducto = @idProducto;
+        END
+        ELSE
+        BEGIN
+            INSERT INTO productos.Inventario (idZonaInventario, idProducto, Stock)
+            VALUES (@idZonaInventario, @idProducto, @cantidadInicial);
+        END
+
+        -- Confirmar la transacción
+        COMMIT TRANSACTION;
+        PRINT 'Producto agregado exitosamente con entrada inicial registrada en inventario.';
+    END TRY
+    BEGIN CATCH
+        -- En caso de error, revertir la transacción
+        ROLLBACK TRANSACTION;
+        PRINT 'Error al agregar el producto: ' + ERROR_MESSAGE();
+    END CATCH
+END;
+GO
+
+EXEC sp_AgregarProducto 
+    @codeProducto = 'AB-123', 
+    @nombreProducto = 'Collar luminoso',
+    @tipo = 'Perro',
+    @descripcion = 'Collar luminoso para mayor visibilidad en la oscuridad',
+    @idCategoria = 9,
+    @precioUnitario = 25.99,
+    @cantidadInicial = 10,
+    @fechaEntrada = '2024-11-13',
+    @idZonaInventario = 'I11';
+
+
+
+-- 6. Procedimiento para crear un nuevo cliente
+IF OBJECT_ID('sp_AgregarCliente', 'P') IS NOT NULL
+    DROP PROCEDURE sp_AgregarCliente;
+
+GO
+
+CREATE PROCEDURE sp_AgregarCliente
+    @Direccion1 NVARCHAR(100),
+    @Direccion2 NVARCHAR(100) = NULL,
+    @Telefono NVARCHAR(20),
+    @tipoCliente NVARCHAR(10),
+    @DNI NVARCHAR(8) = NULL,
+    @Nombre NVARCHAR(100) = NULL,
+    @ApellidoP NVARCHAR(100) = NULL,
+    @ApellidoM NVARCHAR(100) = NULL,
+    @RUC NVARCHAR(11) = NULL,
+    @RazonSocial NVARCHAR(100) = NULL
+AS
+BEGIN
+    BEGIN TRY
+        -- Iniciar transacción
+        BEGIN TRANSACTION;
+
+        -- Insertar en la tabla Cliente
+        DECLARE @idCliente INT;
+        INSERT INTO clientes.Cliente (Direccion1, Direccion2, Telefono)
+        VALUES (@Direccion1, @Direccion2, @Telefono);
+
+        -- Obtener el idCliente recién insertado
+        SET @idCliente = SCOPE_IDENTITY();
+
+        -- Registrar el cliente en Natural o Empresa según el tipo
+        IF @tipoCliente = 'Natural' AND @DNI IS NOT NULL AND @Nombre IS NOT NULL
+        BEGIN
+            INSERT INTO clientes.Natural (idCliente, DNI, Nombre, ApellidoP, ApellidoM)
+            VALUES (@idCliente, @DNI, @Nombre, @ApellidoP, @ApellidoM);
+        END
+        ELSE IF @tipoCliente = 'Empresa' AND @RUC IS NOT NULL AND @RazonSocial IS NOT NULL
+        BEGIN
+            INSERT INTO clientes.Empresa (idCliente, RUC, RazonSocial)
+            VALUES (@idCliente, @RUC, @RazonSocial);
+        END
+        ELSE
+        BEGIN
+            -- Si los datos no son suficientes para el tipo de cliente, lanzar error
+            RAISERROR('Datos insuficientes para registrar el tipo de cliente especificado.', 16, 1);
+        END
+
+        -- Confirmar la transacción
+        COMMIT TRANSACTION;
+        PRINT 'Cliente agregado exitosamente.';
+    END TRY
+    BEGIN CATCH
+        -- Revertir la transacción en caso de error
+        ROLLBACK TRANSACTION;
+        PRINT 'Error al agregar el cliente: ' + ERROR_MESSAGE();
+    END CATCH
+END;
+GO
+
+EXEC sp_AgregarCliente 
+    @Direccion1 = 'Av. Las Flores 123',
+    @Direccion2 = 'Dpto. 302',
+    @Telefono = '987654321',
+    @tipoCliente = 'Natural',
+    @DNI = '12345678',
+    @Nombre = 'Juan',
+    @ApellidoP = 'Pérez',
+    @ApellidoM = 'Gómez';
+
+GO
+
+EXEC sp_AgregarCliente 
+    @Direccion1 = 'Jr. Pizarro 456',
+    @Direccion2 = NULL,
+    @Telefono = '234567890',
+    @tipoCliente = 'Empresa',
+    @RUC = '20512345678',
+    @RazonSocial = 'Servicios Globales SAC';

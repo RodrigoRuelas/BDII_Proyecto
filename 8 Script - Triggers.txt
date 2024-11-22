@@ -1,0 +1,83 @@
+-- 1. Trigger para verificar el stock en la tabla Salida
+CREATE TRIGGER trg_VerificarStockSalida
+ON productos.Salida
+AFTER INSERT
+AS
+BEGIN
+    DECLARE @idProducto INT, @cantidadSalida INT;
+    
+    SELECT @idProducto = idProducto, @cantidadSalida = cantidadSalida
+    FROM inserted;
+
+    IF EXISTS (
+        SELECT 1
+        FROM productos.Inventario
+        WHERE idProducto = @idProducto
+        AND Stock < @cantidadSalida
+    )
+    BEGIN
+        RAISERROR ('No hay suficiente stock para realizar esta salida.', 16, 1);
+        ROLLBACK;
+    END
+    ELSE
+    BEGIN
+        -- Actualizar el stock después de realizar la salida
+        UPDATE productos.Inventario
+        SET Stock = Stock - @cantidadSalida
+        WHERE idProducto = @idProducto;
+    END
+END;
+GO
+
+-- 2. Trigger para actualizar el stock de entrada
+CREATE TRIGGER trg_ActualizarStockEntrada
+ON productos.Entrada
+AFTER INSERT
+AS
+BEGIN
+    DECLARE @idProducto INT, @cantidadEntrada INT;
+    
+    SELECT @idProducto = idProducto, @cantidadEntrada = cantidadEntrada
+    FROM inserted;
+
+    IF EXISTS (SELECT 1 FROM productos.Inventario WHERE idProducto = @idProducto)
+    BEGIN
+        -- Si ya existe el producto en el inventario, actualiza el stock
+        UPDATE productos.Inventario
+        SET Stock = Stock + @cantidadEntrada
+        WHERE idProducto = @idProducto;
+    END
+    ELSE
+    BEGIN
+        -- Si no existe, inserta un nuevo registro en el inventario
+        INSERT INTO productos.Inventario (idZonaInventario, idProducto, Stock)
+        VALUES ('ZONA1', @idProducto, @cantidadEntrada);
+    END
+END;
+GO
+
+
+-- 3. Trigger para calcular el total de la compra
+CREATE TRIGGER trg_CalcularTotalCompra
+ON ventas.Compra
+AFTER INSERT, UPDATE
+AS
+BEGIN
+    DECLARE @idCompra INT, @IGV DECIMAL(5, 2), @Descuento DECIMAL(5, 2), @Total DECIMAL(10, 2);
+
+    SELECT @idCompra = idCompra, @IGV = IGV, @Descuento = Descuento
+    FROM inserted;
+
+    SELECT @Total = SUM(dp.Cantidad * p.precioUnitario)
+    FROM ventas.DetalleCompra AS dp
+    JOIN productos.Producto AS p ON dp.idProducto = p.idProducto
+    WHERE dp.idCompra = @idCompra;
+
+    SET @Total = @Total + (@Total * @IGV / 100) - @Descuento;
+
+    -- Actualizar el total de la compra en una columna (si existiera)
+    -- UPDATE ventas.Compra
+    -- SET TotalCompra = @Total
+    -- WHERE idCompra = @idCompra;
+END;
+GO

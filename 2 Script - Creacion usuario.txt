@@ -1,0 +1,34 @@
+USE PatitasConEstilo;
+GO
+
+-- Crear login para el usuario "Ancori" con su contraseña
+CREATE LOGIN Ancori WITH PASSWORD = '12345';
+GO
+
+-- Crear login para el usuario "Evelyn" con su contraseña
+CREATE LOGIN Evelyn WITH PASSWORD = '1989';
+GO
+
+-- Crear el usuario de base de datos "Ancori" vinculado al login "Ancori"
+CREATE USER Ancori FOR LOGIN Ancori;
+GO
+
+-- Crear el usuario de base de datos "Evelyn" vinculado al login "Evelyn"
+CREATE USER Evelyn FOR LOGIN Evelyn;
+GO
+
+-- Otorgar permisos DELETE, INSERT y UPDATE a "Ancori" en todas las tablas de la base de datos
+GRANT DELETE, INSERT, UPDATE ON DATABASE::PatitasConEstilo TO Ancori;
+GO
+
+-- Otorgar permisos SELECT e INSERT a "Evelyn" en todas las tablas de la base de datos
+GRANT SELECT, INSERT ON DATABASE::PatitasConEstilo TO Evelyn;
+GO
+
+-- Verificar permisos asignados a "Ancori"
+SELECT * FROM sys.database_permissions
+WHERE grantee_principal_id = USER_ID('Ancori');
+
+-- Verificar permisos asignados a "Evelyn"
+SELECT * FROM sys.database_permissions
+WHERE grantee_principal_id = USER_ID('Evelyn');

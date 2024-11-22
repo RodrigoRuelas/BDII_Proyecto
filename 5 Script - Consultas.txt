@@ -1,0 +1,12 @@
+-- 1. Productos comprados por clientes naturales, con detalles de categoría, compra y cliente
+SELECT c.Nombre AS NombreCliente, c.ApellidoP, c.ApellidoM, prod.nombreProducto, prod.Tipo, 
+       cat.Nombre AS Categoria, dc.Cantidad, cmp.fechaCompra, cmp.tipoComprobante, cmp.IGV
+FROM clientes.Natural c
+INNER JOIN ventas.Compra cmp ON c.idCliente = cmp.idCliente
+INNER JOIN ventas.DetalleCompra dc ON cmp.idCompra = dc.idCompra
+INNER JOIN productos.Producto prod ON dc.idProducto = prod.idProducto
+INNER JOIN productos.Categoria cat ON prod.idCategoria = cat.idCategoria
+WHERE cmp.fechaCompra BETWEEN '2024-01-01' AND '2024-12-31'
+ORDER BY cmp.fechaCompra DESC, c.Nombre;
+
+-- 2. 
