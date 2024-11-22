@@ -1,0 +1,5 @@
+Para poder cargar los datos de los archivos csv, tienes que usar los comandos de '4 Script - Carga de Datos'.
+Tambien verificar la ruta en donde se ubican los archivos csv en la maquina.
+De preferencia, crear la siguiente ruta "D:\DatosBD".
+Nos ubicamos en el disco D y creamos la carpeta 'DatosBD', ahi ubicamos los archivos csv.
+Esto para evitar problemas al momentos de cargar todos los datos al momentos de usar los comandos.
