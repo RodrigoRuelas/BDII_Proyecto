@@ -197,8 +197,59 @@ Deallocate Cursor2
 
 
 -- 5. Cursor de reporte de ventas del dia
+Declare Cursor0 Cursor For SELECT idCompra, numComprobante, tipoComprobante, fechaCompra, Total FROM ventas.Compra WHERE fechaCompra = '2024-11-21' ORDER BY fechaCompra DESC;
+Declare @idCompra varchar(10), @numComprobante varchar(10), @tipoComprobante varchar(15), @fechaCompra varchar(10), @Total varchar(10)
+Open Cursor0
+Fetch Cursor0 Into @idCompra, @numComprobante, @tipoComprobante, @fechaCompra, @Total
+	Print Space(31) + 'REPORTE DE VENTAS DEL DIA - ' + @fechaCompra
+	Print Replicate('*',100)
+	Print ''
+	Print 'ID Compra' + '		' + 'Numero Comprobante' + '			' + 'Tipo Comprobante' + '		     ' + 'Total'
+	While @@FETCH_STATUS=0
+	Begin
+		Print @idCompra + '						' + @numComprobante + '			   		' + @tipoComprobante + '				' + @Total
+		Fetch Cursor0 Into @idCompra, @numComprobante, @tipoComprobante, @fechaCompra, @Total
+	End
+	Print ''
+
+	Declare Cursor1 Cursor For SELECT SUM(Total) AS MontoTotalDia FROM ventas.Compra WHERE fechaCompra = @fechaCompra;
+	Declare @MontoTotal varchar(10)
+	Open Cursor1
+	Fetch Cursor1 Into @MontoTotal
+	Print 'Monto Total	: ' + @MontoTotal
+	Close Cursor1
+	Deallocate Cursor1
+
+Close Cursor0
+Deallocate Cursor0
+
 
 -- 6. Cursor de reporte de ventas del mes
+Declare Cursor0 Cursor For SELECT idCompra, numComprobante, tipoComprobante, fechaCompra, Total FROM ventas.Compra WHERE fechaCompra >= '2024-11-01' AND fechaCompra <= '2024-11-30';
+Declare @idCompra varchar(10), @numComprobante varchar(10), @tipoComprobante varchar(15), @fechaCompra varchar(10), @Total varchar(10)
+Open Cursor0
+Fetch Cursor0 Into @idCompra, @numComprobante, @tipoComprobante, @fechaCompra, @Total
+	Print Space(37) + 'REPORTE DE VENTAS DEL MES'
+	Print Replicate('*',100)
+	Print ''
+	Print 'ID Compra' + '		' + 'Numero Comprobante' + '			' + 'Tipo Comprobante' + '		     ' + 'Total'
+	While @@FETCH_STATUS=0
+	Begin
+		Print @idCompra + '						' + @numComprobante + '			   		' + @tipoComprobante + '				' + @Total
+		Fetch Cursor0 Into @idCompra, @numComprobante, @tipoComprobante, @fechaCompra, @Total
+	End
+	Print ''
+
+	Declare Cursor1 Cursor For SELECT SUM(Total) AS MontoTotalDia FROM ventas.Compra WHERE fechaCompra >= '2024-11-01' AND fechaCompra <= '2024-11-30';
+	Declare @MontoTotal varchar(10)
+	Open Cursor1
+	Fetch Cursor1 Into @MontoTotal
+	Print 'Monto Total	: ' + @MontoTotal
+	Close Cursor1
+	Deallocate Cursor1
+
+Close Cursor0
+Deallocate Cursor0
 
 -- 7. Cursor de reporte de entradas de productos del mes
 
