@@ -1,0 +1,28 @@
+USE [master]
+GO
+
+/****** Object:  Audit [Audit-SWB]    Script Date: 24/11/2024 19:58:44 ******/
+CREATE SERVER AUDIT [Audit-SWB]
+TO FILE 
+(	
+	--El filepath puede ser cambiado según se desee
+	FILEPATH = N'D:\Audits\'
+	,MAXSIZE = 0 MB
+	,MAX_ROLLOVER_FILES = 2147483647
+	,RESERVE_DISK_SPACE = OFF
+) WITH (QUEUE_DELAY = 1000, ON_FAILURE = CONTINUE, AUDIT_GUID = '9f3b12a9-aaed-46bd-8f95-e76387000278')
+ALTER SERVER AUDIT [Audit-SWB] WITH (STATE = ON)
+GO
+
+
+USE [PatitasConEstilo]
+GO
+
+CREATE DATABASE AUDIT SPECIFICATION [DatabaseAuditSpecification-PCE]
+FOR SERVER AUDIT [Audit-SWB]
+ADD (UPDATE ON OBJECT::[clientes].[Cliente] BY [Ancori]),
+ADD (SELECT ON OBJECT::[clientes].[Cliente] BY [Ancori]),
+ADD (INSERT ON OBJECT::[clientes].[Cliente] BY [Ancori]),
+ADD (DELETE ON OBJECT::[clientes].[Cliente] BY [Ancori])
+WITH (STATE = ON)
+GO
