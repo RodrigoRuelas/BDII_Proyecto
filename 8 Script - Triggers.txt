@@ -4,30 +4,47 @@ ON productos.Salida
 AFTER INSERT
 AS
 BEGIN
-    DECLARE @idProducto INT, @cantidadSalida INT;
-    
-    SELECT @idProducto = idProducto, @cantidadSalida = cantidadSalida
-    FROM inserted;
+    BEGIN TRY
+        DECLARE @idProducto INT, @cantidadSalida INT;
 
-    IF EXISTS (
-        SELECT 1
-        FROM productos.Inventario
-        WHERE idProducto = @idProducto
-        AND Stock < @cantidadSalida
-    )
-    BEGIN
-        RAISERROR ('No hay suficiente stock para realizar esta salida.', 16, 1);
-        ROLLBACK;
-    END
-    ELSE
-    BEGIN
-        -- Actualizar el stock después de realizar la salida
+        -- Obtiene los valores insertados
+        SELECT TOP 1 @idProducto = idProducto, @cantidadSalida = cantidadSalida
+        FROM inserted;
+
+        -- Verifica si el producto existe y el stock es suficiente
+        IF NOT EXISTS (SELECT 1 FROM productos.Inventario WHERE idProducto = @idProducto)
+        BEGIN
+            RAISERROR('El producto no existe en el inventario.', 16, 1);
+            ROLLBACK;
+            RETURN;
+        END
+
+        IF EXISTS (
+            SELECT 1
+            FROM productos.Inventario
+            WHERE idProducto = @idProducto AND Stock < @cantidadSalida
+        )
+        BEGIN
+            RAISERROR('No hay suficiente stock para realizar esta salida.', 16, 1);
+            ROLLBACK;
+            RETURN;
+        END
+
+        -- Actualiza el stock
         UPDATE productos.Inventario
         SET Stock = Stock - @cantidadSalida
         WHERE idProducto = @idProducto;
-    END
+    END TRY
+    BEGIN CATCH
+        -- Manejo de errores
+        DECLARE @ErrorMessage NVARCHAR(4000), @ErrorSeverity INT, @ErrorState INT;
+        SELECT @ErrorMessage = ERROR_MESSAGE(), @ErrorSeverity = ERROR_SEVERITY(), @ErrorState = ERROR_STATE();
+        RAISERROR(@ErrorMessage, @ErrorSeverity, @ErrorState);
+        ROLLBACK;
+    END CATCH
 END;
 GO
+
 
 -- 2. Trigger para actualizar el stock de entrada
 CREATE TRIGGER trg_ActualizarStockEntrada
@@ -35,24 +52,35 @@ ON productos.Entrada
 AFTER INSERT
 AS
 BEGIN
-    DECLARE @idProducto INT, @cantidadEntrada INT;
-    
-    SELECT @idProducto = idProducto, @cantidadEntrada = cantidadEntrada
-    FROM inserted;
+    BEGIN TRY
+        DECLARE @idProducto INT, @cantidadEntrada INT;
 
-    IF EXISTS (SELECT 1 FROM productos.Inventario WHERE idProducto = @idProducto)
-    BEGIN
-        -- Si ya existe el producto en el inventario, actualiza el stock
-        UPDATE productos.Inventario
-        SET Stock = Stock + @cantidadEntrada
-        WHERE idProducto = @idProducto;
-    END
-    ELSE
-    BEGIN
-        -- Si no existe, inserta un nuevo registro en el inventario
-        INSERT INTO productos.Inventario (idZonaInventario, idProducto, Stock)
-        VALUES ('ZONA1', @idProducto, @cantidadEntrada);
-    END
+        -- Obtiene los valores insertados
+        SELECT TOP 1 @idProducto = idProducto, @cantidadEntrada = cantidadEntrada
+        FROM inserted;
+
+        -- Verifica si el producto ya existe en el inventario
+        IF EXISTS (SELECT 1 FROM productos.Inventario WHERE idProducto = @idProducto)
+        BEGIN
+            -- Actualiza el stock
+            UPDATE productos.Inventario
+            SET Stock = Stock + @cantidadEntrada
+            WHERE idProducto = @idProducto;
+        END
+        ELSE
+        BEGIN
+            -- Inserta un nuevo registro
+            INSERT INTO productos.Inventario (idZonaInventario, idProducto, Stock)
+            VALUES ('ZONA1', @idProducto, @cantidadEntrada);
+        END
+    END TRY
+    BEGIN CATCH
+        -- Manejo de errores
+        DECLARE @ErrorMessage NVARCHAR(4000), @ErrorSeverity INT, @ErrorState INT;
+        SELECT @ErrorMessage = ERROR_MESSAGE(), @ErrorSeverity = ERROR_SEVERITY(), @ErrorState = ERROR_STATE();
+        RAISERROR(@ErrorMessage, @ErrorSeverity, @ErrorState);
+        ROLLBACK;
+    END CATCH
 END;
 GO
 
@@ -63,21 +91,33 @@ ON ventas.Compra
 AFTER INSERT, UPDATE
 AS
 BEGIN
-    DECLARE @idCompra INT, @IGV DECIMAL(5, 2), @Descuento DECIMAL(5, 2), @Total DECIMAL(10, 2);
+    BEGIN TRY
+        DECLARE @idCompra INT, @IGV DECIMAL(5, 2), @Descuento DECIMAL(5, 2), @Subtotal DECIMAL(10, 2), @Total DECIMAL(10, 2);
 
-    SELECT @idCompra = idCompra, @IGV = IGV, @Descuento = Descuento
-    FROM inserted;
+        -- Obtiene los valores insertados o actualizados
+        SELECT TOP 1 @idCompra = idCompra, @IGV = IGV, @Descuento = Descuento
+        FROM inserted;
 
-    SELECT @Total = SUM(dp.Cantidad * p.precioUnitario)
-    FROM ventas.DetalleCompra AS dp
-    JOIN productos.Producto AS p ON dp.idProducto = p.idProducto
-    WHERE dp.idCompra = @idCompra;
+        -- Calcula el subtotal
+        SELECT @Subtotal = SUM(dp.Cantidad * p.precioUnitario)
+        FROM ventas.DetalleCompra AS dp
+        JOIN productos.Producto AS p ON dp.idProducto = p.idProducto
+        WHERE dp.idCompra = @idCompra;
 
-    SET @Total = @Total + (@Total * @IGV / 100) - @Descuento;
+        -- Calcula el total incluyendo IGV y descuento
+        SET @Total = @Subtotal + (@Subtotal * @IGV / 100) - @Descuento;
 
-    -- Actualizar el total de la compra en una columna (si existiera)
-    -- UPDATE ventas.Compra
-    -- SET TotalCompra = @Total
-    -- WHERE idCompra = @idCompra;
+        -- Actualiza el total en la tabla de compras
+        UPDATE ventas.Compra
+        SET Total = @Total
+        WHERE idCompra = @idCompra;
+    END TRY
+    BEGIN CATCH
+        -- Manejo de errores
+        DECLARE @ErrorMessage NVARCHAR(4000), @ErrorSeverity INT, @ErrorState INT;
+        SELECT @ErrorMessage = ERROR_MESSAGE(), @ErrorSeverity = ERROR_SEVERITY(), @ErrorState = ERROR_STATE();
+        RAISERROR(@ErrorMessage, @ErrorSeverity, @ErrorState);
+        ROLLBACK;
+    END CATCH
 END;
 GO
