@@ -251,6 +251,38 @@ Fetch Cursor0 Into @idCompra, @numComprobante, @tipoComprobante, @fechaCompra, @
 Close Cursor0
 Deallocate Cursor0
 
+
 -- 7. Cursor de reporte de entradas de productos del mes
+Declare Cursor1 Cursor For SELECT e.idEntrada, e.idProducto, p.nombreProducto, e.fechaEntrada, e.cantidadEntrada FROM productos.Entrada e INNER JOIN productos.Producto p ON e.idProducto = p.idProducto WHERE e.fechaEntrada >= '2024-04-01' AND e.fechaEntrada <= '2024-04-30';
+Declare @idEntrada varchar(10), @idProducto varchar(10), @nombreProducto varchar(50), @fechaEntrada varchar(10), @cantidadEntrada varchar(10)
+Open Cursor1
+Fetch Cursor1 Into @idEntrada, @idProducto, @nombreProducto, @fechaEntrada, @cantidadEntrada
+Print Space(34)+'REPORTE DE ENTRADA DE PRODUCTOS'
+Print Replicate('*',100)
+Print ''
+Print 'ID Entrada' + '		' + 'ID Producto' + '		' + 'Nombre Producto' + '					' + 'Fecha Entrada' + '				' + 'Cantidad Entrada'
+While @@FETCH_STATUS=0
+	Begin
+		Print @idEntrada + '					' + @idProducto + '			' + @nombreProducto + '					' + @fechaEntrada + '					' + @cantidadEntrada
+		Fetch Cursor1 Into @idEntrada, @idProducto, @nombreProducto, @fechaEntrada, @cantidadEntrada
+	End
+Close Cursor1
+Deallocate Cursor1
+
 
 -- 8. Cursor de reporte de salidas de productos del mes
+Declare Cursor1 Cursor For SELECT e.idSalida, e.idProducto, p.nombreProducto, e.fechaSalida, e.cantidadSalida FROM productos.Salida e INNER JOIN productos.Producto p ON e.idProducto = p.idProducto WHERE e.fechaSalida >= '2024-11-01' AND e.fechaSalida <= '2024-11-30';
+Declare @idSalida varchar(10), @idProducto varchar(10), @nombreProducto varchar(50), @fechaSalida varchar(10), @cantidadSalida varchar(10)
+Open Cursor1
+Fetch Cursor1 Into @idSalida, @idProducto, @nombreProducto, @fechaSalida, @cantidadSalida
+Print Space(34)+'REPORTE DE SALIDA DE PRODUCTOS'
+Print Replicate('*',100)
+Print ''
+Print 'ID Salida' + '		' + 'ID Producto' + '		' + 'Nombre Producto' + '					' + 'Fecha Salida' + '				' + 'Cantidad Salida'
+While @@FETCH_STATUS=0
+	Begin
+		Print @idSalida + '					' + @idProducto + '			' + @nombreProducto + '					' + @fechaSalida + '					' + @cantidadSalida
+		Fetch Cursor1 Into @idSalida, @idProducto, @nombreProducto, @fechaSalida, @cantidadSalida
+	End
+Close Cursor1
+Deallocate Cursor1
