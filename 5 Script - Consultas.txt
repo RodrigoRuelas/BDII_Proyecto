@@ -9,4 +9,95 @@ INNER JOIN productos.Categoria cat ON prod.idCategoria = cat.idCategoria
 WHERE cmp.fechaCompra BETWEEN '2024-01-01' AND '2024-12-31'
 ORDER BY cmp.fechaCompra DESC, c.Nombre;
 
--- 2. 
+
+-- 2. Listado de clientes y sus compras, incluyendo aquellos que aún no han realizado ninguna compra
+SELECT c.idCliente, ISNULL(n.Nombre, e.RazonSocial) AS NombreCliente, cmp.fechaCompra, 
+       cmp.tipoComprobante, dc.Cantidad, prod.nombreProducto
+FROM clientes.Cliente c
+LEFT JOIN clientes.Natural n ON c.idCliente = n.idCliente
+LEFT JOIN clientes.Empresa e ON c.idCliente = e.idCliente
+LEFT JOIN ventas.Compra cmp ON c.idCliente = cmp.idCliente
+LEFT JOIN ventas.DetalleCompra dc ON cmp.idCompra = dc.idCompra
+LEFT JOIN productos.Producto prod ON dc.idProducto = prod.idProducto
+WHERE cmp.fechaCompra IS NULL OR cmp.fechaCompra > '2024-01-01'
+ORDER BY c.idCliente;
+
+
+-- 3. Listado de categorías con productos
+SELECT cat.idCategoria, cat.Nombre AS Categoria, prod.idProducto, prod.nombreProducto, 
+       e.fechaEntrada, inv.Stock
+FROM productos.Categoria cat
+RIGHT JOIN productos.Producto prod ON cat.idCategoria = prod.idCategoria
+RIGHT JOIN productos.Entrada e ON prod.idProducto = e.idProducto
+RIGHT JOIN productos.Inventario inv ON prod.idProducto = inv.idProducto
+
+
+-- 4. Productos con mayor cantidad de ventas
+SELECT 
+    p.nombreProducto,
+    SUM(dc.Cantidad) AS TotalVendido
+FROM ventas.DetalleCompra AS dc
+INNER JOIN productos.Producto AS p
+    ON dc.idProducto = p.idProducto
+INNER JOIN ventas.Compra AS c
+    ON dc.idCompra = c.idCompra
+WHERE 
+    c.fechaCompra BETWEEN '2024-11-01' AND '2024-11-30'
+GROUP BY p.nombreProducto
+ORDER BY TotalVendido DESC;
+
+-- 5. Stock actual de productos en inventario
+SELECT 
+    p.nombreProducto,
+    i.Stock AS StockActual
+FROM productos.Inventario AS i
+INNER JOIN productos.Producto AS p
+    ON i.idProducto = p.idProducto;
+
+
+-- 6. Entradas y salidas de productos en un rango de fechas
+SELECT 
+    'Entrada' AS TipoMovimiento,
+    p.nombreProducto,
+    e.fechaEntrada AS Fecha,
+    e.cantidadEntrada AS Cantidad
+FROM productos.Entrada AS e
+INNER JOIN productos.Producto AS p
+    ON e.idProducto = p.idProducto
+WHERE e.fechaEntrada BETWEEN '2024-04-01' AND '2024-04-30'
+UNION ALL
+SELECT 
+    'Salida' AS TipoMovimiento,
+    p.nombreProducto,
+    s.fechaSalida AS Fecha,
+    s.cantidadSalida AS Cantidad
+FROM productos.Salida AS s
+INNER JOIN productos.Producto AS p
+    ON s.idProducto = p.idProducto
+WHERE s.fechaSalida BETWEEN '2024-04-01' AND '2024-04-30'
+ORDER BY Fecha;
+
+
+-- 7. Ingresos netos de las ventas en un mes
+SELECT 
+    SUM(c.Total) AS IngresosNetos
+FROM ventas.Compra AS c
+WHERE 
+    fechaCompra BETWEEN '2024-11-01' AND '2024-11-30'
+
+
+-- 8. Cantidad de productos vendidos por categoría
+SELECT 
+    cat.Nombre AS Categoria,
+    SUM(dc.Cantidad) AS ProductosVendidos
+FROM ventas.DetalleCompra AS dc
+INNER JOIN productos.Producto AS p
+    ON dc.idProducto = p.idProducto
+INNER JOIN productos.Categoria AS cat
+    ON p.idCategoria = cat.idCategoria
+INNER JOIN ventas.Compra AS c
+    ON dc.idCompra = c.idCompra
+WHERE 
+    c.fechaCompra BETWEEN '2024-11-01' AND '2024-11-30' -- Cambiar el rango de fechas
+GROUP BY cat.Nombre
+ORDER BY ProductosVendidos DESC;
