@@ -1,0 +1,153 @@
+-- 1. Información de Tablas y Columnas
+SELECT 
+	'DATADICTIONARY' AS [REPORT],
+	@@SERVERNAME AS [ServerName],
+	DB_NAME() AS [DatabaseName],
+	t.name AS [TableName], 
+	schema_name(t.schema_id) AS [SchemaName], 
+	c.name AS [ColumnName], 
+	st.name AS [DataType], 
+	c.max_length AS [MaxLength], 
+	CASE 
+		WHEN c.is_nullable = 0 THEN 'NO'
+		ELSE 'YES'
+	END AS [IsNull],
+	CASE 
+		WHEN c.is_identity = 0 THEN 'NO'
+		ELSE 'YES'
+	END AS [IsIdentity], 
+	isnull(ep.value, '-- add description here') AS [Description]
+FROM [sys].[tables] t
+INNER JOIN [sys].[columns] c
+	ON t.object_id = c.object_id 
+INNER JOIN [sys].[types] st 
+	ON c.user_type_id = st.user_type_id
+LEFT JOIN [sys].[extended_properties] ep 
+	ON t.object_id = ep.major_id 
+	AND c.column_id = ep.minor_id
+ORDER BY 
+	t.name,
+	c.column_id;
+
+-- 2. Información de Restricciones (Llaves Primarias y Foráneas)
+SELECT 
+	'CONSTRAINTS' AS [REPORT],
+	@@SERVERNAME AS [ServerName],
+	DB_NAME() AS [DatabaseName],
+	t.name AS [TableName],
+	kc.name AS [ConstraintName],
+	CASE 
+		WHEN kc.type = 'PK' THEN 'Primary Key'
+		WHEN kc.type = 'F' THEN 'Foreign Key'
+		ELSE kc.type_desc
+	END AS [ConstraintType],
+	c.name AS [ColumnName],
+	CASE 
+		WHEN kc.type = 'F' THEN fk.referenced_object_name 
+		ELSE NULL
+	END AS [ReferencedTable],
+	CASE 
+		WHEN kc.type = 'F' THEN fk.referenced_column_name 
+		ELSE NULL
+	END AS [ReferencedColumn]
+FROM sys.key_constraints kc
+INNER JOIN sys.tables t 
+	ON kc.parent_object_id = t.object_id
+INNER JOIN sys.index_columns ic 
+	ON kc.parent_object_id = ic.object_id 
+	AND kc.unique_index_id = ic.index_id
+INNER JOIN sys.columns c 
+	ON ic.object_id = c.object_id 
+	AND c.column_id = ic.column_id
+LEFT JOIN (
+	SELECT fk.name AS fk_name, 
+		   fk.parent_object_id, 
+		   fk.referenced_object_id, 
+		   fkc.parent_column_id, 
+		   rt.name AS referenced_object_name, 
+		   rc.name AS referenced_column_name
+	FROM sys.foreign_keys fk
+	INNER JOIN sys.foreign_key_columns fkc 
+		ON fk.object_id = fkc.constraint_object_id
+	INNER JOIN sys.tables rt 
+		ON fkc.referenced_object_id = rt.object_id
+	INNER JOIN sys.columns rc 
+		ON fkc.referenced_column_id = rc.column_id 
+		AND rc.object_id = rt.object_id
+) fk 
+	ON kc.parent_object_id = fk.parent_object_id 
+	AND ic.column_id = fk.parent_column_id;
+
+-- 3. Información de Vistas
+SELECT 
+	'VIEWS' AS [REPORT],
+	@@SERVERNAME AS [ServerName],
+	DB_NAME() AS [DatabaseName],
+	v.name AS [ViewName],
+	schema_name(v.schema_id) AS [SchemaName],
+	m.definition AS [ViewDefinition]
+FROM sys.views v
+INNER JOIN sys.sql_modules m 
+	ON v.object_id = m.object_id
+ORDER BY v.name;
+
+-- 4. Procedimientos Almacenados
+SELECT 
+	'STOREDPROCEDURES' AS [REPORT],
+	@@SERVERNAME AS [ServerName],
+	DB_NAME() AS [DatabaseName],
+	p.name AS [ProcedureName],
+	schema_name(p.schema_id) AS [SchemaName],
+	m.definition AS [ProcedureDefinition]
+FROM sys.procedures p
+INNER JOIN sys.sql_modules m 
+	ON p.object_id = m.object_id
+ORDER BY p.name;
+
+-- 5. Información de Detonadores (Triggers)
+SELECT 
+	'TRIGGERS' AS [REPORT],
+	@@SERVERNAME AS [ServerName],
+	DB_NAME() AS [DatabaseName],
+	tr.name AS [TriggerName],
+	schema_name(t.schema_id) AS [SchemaName],
+	t.name AS [TableName],
+	m.definition AS [TriggerDefinition],
+	CASE 
+		WHEN tr.is_instead_of_trigger = 1 THEN 'INSTEAD OF'
+		ELSE 'AFTER'
+	END AS [TriggerType]
+FROM sys.triggers tr
+INNER JOIN sys.tables t 
+	ON tr.parent_id = t.object_id
+INNER JOIN sys.sql_modules m 
+	ON tr.object_id = m.object_id
+ORDER BY tr.name;
+
+-- 6. Usuarios de la Base de Datos
+SELECT 
+	'USERS' AS [REPORT],
+	@@SERVERNAME AS [ServerName],
+	DB_NAME() AS [DatabaseName],
+	principal_id AS [UserID],
+	name AS [UserName],
+	type_desc AS [UserType],
+	create_date AS [CreateDate]
+FROM sys.database_principals
+WHERE type IN ('S', 'U', 'G') 
+AND principal_id > 4 -- Ignorar usuarios del sistema (dbo, guest, etc.)
+ORDER BY name;
+
+-- 7. Roles de la Base de Datos
+SELECT 
+	'ROLES' AS [REPORT],
+	@@SERVERNAME AS [ServerName],
+	DB_NAME() AS [DatabaseName],
+	r.name AS [RoleName],
+	u.name AS [MemberName]
+FROM sys.database_role_members drm
+INNER JOIN sys.database_principals r 
+	ON drm.role_principal_id = r.principal_id
+INNER JOIN sys.database_principals u 
+	ON drm.member_principal_id = u.principal_id
+ORDER BY r.name, u.name;
